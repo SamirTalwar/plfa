@@ -2,6 +2,8 @@
 with pkgs;
 mkShell {
   buildInputs = [
-    agda
+    (agda.withPackages (ps: [
+      ps.standard-library
+    ]))
   ];
 }
