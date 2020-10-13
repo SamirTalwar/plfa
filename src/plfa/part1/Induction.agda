@@ -222,7 +222,7 @@ inc (n I) = inc n O
 
 to : ℕ → Bin
 -- This must be `⟨⟩`, not `⟨⟩ O`, for the laws to hold.
-to zero = ⟨⟩
+to zero = ⟨⟩ O
 to (suc n) = inc (to n)
 
 from : Bin → ℕ
@@ -241,7 +241,9 @@ bin-O-is-*2 (suc n) rewrite bin-O-is-*2 n = refl
 
 -- does not hold:
 -- bin-convert-from-to : ∀ (b : Bin) → to (from b) ≡ b
--- counter-example:
+-- counter-examples:
+_ : to (from (⟨⟩)) ≡ ⟨⟩ O
+_ = refl
 _ : to (from (⟨⟩ O I)) ≡ ⟨⟩ I
 _ = refl
 
