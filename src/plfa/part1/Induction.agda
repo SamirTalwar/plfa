@@ -228,12 +228,12 @@ to (suc n) = inc (to n)
 from : Bin → ℕ
 from ⟨⟩ = 0
 from (bin O) = from bin * 2
-from (bin I) = from bin * 2 + 1
+from (bin I) = suc (from bin * 2)
 
 bin-inc-is-suc : ∀ (b : Bin) → from (inc b) ≡ suc (from b)
 bin-inc-is-suc ⟨⟩ = refl
-bin-inc-is-suc (b O) rewrite bin-inc-is-suc b | +-comm (from b * 2) 1 = refl
-bin-inc-is-suc (b I) rewrite bin-inc-is-suc b | *-distrib-+ 1 (from b) 2 | +-comm (from b * 2) 1 = refl
+bin-inc-is-suc (b O) rewrite bin-inc-is-suc b = refl
+bin-inc-is-suc (b I) rewrite bin-inc-is-suc b = refl
 
 bin-O-is-*2 : ∀ (n : ℕ) → to ((suc n) * 2) ≡ (to (suc n)) O
 bin-O-is-*2 zero rewrite *-zeroˡ 2 = refl
@@ -249,6 +249,6 @@ _ = refl
 
 bin-convert-to-from : ∀ (n : ℕ) → from (to n) ≡ n
 bin-convert-to-from zero = refl
-bin-convert-to-from (suc n) rewrite bin-convert-to-from n | bin-inc-is-suc (to n) | bin-convert-to-from n = refl
+bin-convert-to-from (suc n) rewrite bin-inc-is-suc (to n) | bin-convert-to-from n = refl
 
 -- import Data.Nat.Properties using (+-assoc; +-identityʳ; +-suc; +-comm)
