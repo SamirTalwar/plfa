@@ -3,10 +3,11 @@ module plfa.stretch.Binary where
 open import Data.Nat using (ℕ; zero; suc; _+_; _*_)
 open import Data.Nat.Properties using (+-comm; +-identityˡ; +-identityʳ; +-suc; *-comm; *-suc; *-zero; *-zeroˡ)
 open import Function.Base using (_∘_)
-open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym)
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; cong₂; sym)
 open Relation.Binary.PropositionalEquality.≡-Reasoning
 
-open import plfa.part1.Isomorphism using (_≲_)
+open import plfa.part1.Isomorphism using (_≃_; _≲_)
+open import plfa.part1.Quantifiers using (∃-syntax; ⟨_,_⟩)
 
 -- Binary
 
@@ -308,4 +309,39 @@ can-identity (canonical (one-I {b} o)) =
     ; from∘to = bin-convert-to-from
     -- `to∘from` cannot be defined because binary numbers can have leading zeroes.
     -- e.g. `to (from (⟨⟩ O I)) = ⟨⟩ I`
+    }
+
+-- Part 1, Chapter 8: Quantifiers
+
+≡One : ∀ {b : Bin} (o o′ : One b)
+     → o ≡ o′
+≡One one one = refl
+≡One (one-O o) (one-O o′) rewrite ≡One o o′ = refl
+≡One (one-I o) (one-I o′) rewrite ≡One o o′ = refl
+
+≡Can : ∀ {b : Bin} (cb : Can b) (cb′ : Can b)
+     → cb ≡ cb′
+≡Can zero zero = refl
+≡Can zero (canonical (one-O ()))
+≡Can (canonical (one-O ())) zero
+≡Can (canonical o) (canonical o′) rewrite ≡One o o′ = refl
+
+proj₁ : ∀ {A : Set} {B : A → Set}
+      → ∃[ x ] B x
+      → A
+proj₁ ⟨ x , _ ⟩ = x
+
+proj₁≡→Can≡ : ∀ {cb cb′ : ∃[ b ] (Can b)}
+            → proj₁ cb ≡ proj₁ cb′
+            → cb ≡ cb′
+proj₁≡→Can≡ {⟨ b , cb ⟩} {⟨ b , cb′ ⟩} refl = cong ⟨ b ,_⟩ (≡Can cb cb′)
+
+ℕ≃∃Can : ∀ {n : ℕ}
+       → ℕ ≃ ∃[ b ] (Can b)
+ℕ≃∃Can =
+  record
+    { to   = λ n → ⟨ to n , to-produces-can n ⟩
+    ; from = λ{ ⟨ b , _ ⟩ → from b }
+    ; from∘to = bin-convert-to-from
+    ; to∘from = λ{ ⟨ b , can ⟩ → proj₁≡→Can≡ (can-identity can) }
     }

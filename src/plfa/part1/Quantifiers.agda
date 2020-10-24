@@ -79,7 +79,7 @@ syntax Σ-syntax A (λ x → B) = Σ[ x ∈ A ] B
 record Σ′ (A : Set) (B : A → Set) : Set where
   field
     proj₁′ : A
-    proj₂' : B proj₁′
+    proj₂′ : B proj₁′
 
 ∃ : ∀ {A : Set} (B : A → Set) → Set
 ∃ {A} B = Σ A B
