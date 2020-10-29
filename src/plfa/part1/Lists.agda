@@ -883,3 +883,43 @@ Any? P? (x ∷ xs) with   P? x | Any? P? xs
 ...                 | yes Px |          _ = yes (here Px)
 ...                 | no ¬Px |    yes Pxs = yes (there Pxs)
 ...                 | no ¬Px |    no ¬Pxs = no (λ { (here Px) → ¬Px Px ; (there Pxs) → ¬Pxs Pxs })
+
+-- Split
+
+data merge {A : Set} : (xs ys zs : List A) → Set where
+  [] :
+      --------------
+      merge [] [] []
+
+  left-∷ : ∀ {x xs ys zs}
+    → merge xs ys zs
+      --------------------------
+    → merge (x ∷ xs) ys (x ∷ zs)
+
+  right-∷ : ∀ {y xs ys zs}
+    → merge xs ys zs
+      --------------------------
+    → merge xs (y ∷ ys) (y ∷ zs)
+
+_ : merge [ 1 , 4 ] [ 2 , 3 ] [ 1 , 2 , 3 , 4 ]
+_ = left-∷ (right-∷ (right-∷ (left-∷ [])))
+
+split : ∀ {A : Set} {P : A → Set} (P? : Decidable P) (zs : List A)
+      → ∃[ xs ] ∃[ ys ] (merge xs ys zs × (All P xs × All (¬_ ∘ P) ys))
+split p? [] = ⟨ [] , ⟨ [] , ⟨ [] , ⟨ [] , [] ⟩ ⟩ ⟩ ⟩
+split p? (z ∷ zs) with p? z   | split p? zs
+...                  | yes Pz | ⟨ xs , ⟨ ys , ⟨ merged , ⟨ all[P,xs] , all[¬P,ys] ⟩ ⟩ ⟩ ⟩ =
+                         ⟨ z ∷ xs , ⟨ ys , ⟨ left-∷ merged , ⟨ Pz ∷ all[P,xs] , all[¬P,ys] ⟩ ⟩ ⟩ ⟩
+...                  | no ¬Pz | ⟨ xs , ⟨ ys , ⟨ merged , ⟨ all[P,xs] , all[¬P,ys] ⟩ ⟩ ⟩ ⟩ =
+                         ⟨ xs , ⟨ z ∷ ys , ⟨ right-∷ merged , ⟨ all[P,xs] , ¬Pz ∷ all[¬P,ys] ⟩ ⟩ ⟩ ⟩
+
+-- import Data.List using (List; _++_; length; reverse; map; foldr; downFrom)
+-- import Data.List.Relation.Unary.All using (All; []; _∷_)
+-- import Data.List.Relation.Unary.Any using (Any; here; there)
+-- import Data.List.Membership.Propositional using (_∈_)
+-- import Data.List.Properties
+--   using (reverse-++-commute; map-compose; map-++-commute; foldr-++)
+--   renaming (mapIsFold to map-is-foldr)
+-- import Algebra.Structures using (IsMonoid)
+-- import Relation.Unary using (Decidable)
+-- import Relation.Binary using (Decidable)
