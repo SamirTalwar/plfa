@@ -245,6 +245,7 @@ _ = ξ-·₁ (β-ƛ V-ƛ)
 
 infix  2 _-↠_
 infix  1 begin_
+infixr 2 _⟶⟨⟩_
 infixr 2 _⟶⟨_⟩_
 infixr 2 _-↠⟨_⟩_
 infix  3 _∎
@@ -262,6 +263,11 @@ begin_ : ∀ {M N}
        → M -↠ N
        → M -↠ N
 begin m-↠n = m-↠n
+
+_⟶⟨⟩_ : ∀ M {N}
+      → M -↠ N
+      → M -↠ N
+M ⟶⟨⟩ MN = MN
 
 _-↠⟨_⟩_ : ∀ L {M N}
         → L -↠ M
@@ -329,3 +335,258 @@ data _-↠′_ : Term → Term → Set where
     ≡⟨ cong (L ⟶⟨ LM ⟩_) (from∘to M N MN) ⟩
       (L ⟶⟨ LM ⟩ MN)
     ≡∎
+
+-- Confluence
+
+postulate
+  confluence : ∀ {L M N}
+             → ((L -↠ M) × (L -↠ N))
+             → ∃[ P ] ((M -↠ P) × (N -↠ P))
+
+  diamond : ∀ {L M N}
+          → (L ⟶ M × L ⟶ N)
+          → ∃[ P ] (M ⟶ P × N ⟶ P)
+
+  deterministic : ∀ {L M N}
+                → L ⟶ M
+                → L ⟶ N
+                → M ≡ N
+
+_ : twoᶜ · sucᶜ · `zero -↠ `suc `suc `zero
+_ =
+  begin
+    twoᶜ · sucᶜ · `zero
+  ⟶⟨⟩
+    (ƛ "s" ⇒ ƛ "z" ⇒ ` "s" · (` "s" · ` "z")) · (ƛ "n" ⇒ `suc (` "n")) · `zero
+  ⟶⟨ ξ-·₁ (β-ƛ V-ƛ) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · `zero
+  ⟶⟨ β-ƛ V-zero ⟩
+    sucᶜ · (sucᶜ · `zero)
+  ⟶⟨ ξ-·₂ V-ƛ (β-ƛ V-zero) ⟩
+    sucᶜ · (`suc `zero)
+  ⟶⟨ β-ƛ (V-suc V-zero) ⟩
+    `suc `suc `zero
+  ∎
+
+_ : plus · two · two -↠ `suc `suc `suc `suc `zero
+_ =
+  begin
+    plus · two · two
+  ⟶⟨⟩
+    (μ "+" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+      case ` "m"
+        [zero⇒ ` "n"
+        |suc "m" ⇒ `suc (` "+" · ` "m" · ` "n")
+        ])
+      · `suc `suc `zero
+      · `suc `suc `zero
+  ⟶⟨ ξ-·₁ (ξ-·₁ β-μ) ⟩
+    (ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+      · `suc `suc `zero
+      · `suc `suc `zero
+  ⟶⟨ ξ-·₁ (β-ƛ (V-suc (V-suc V-zero))) ⟩
+    (ƛ "n" ⇒
+         case (`suc `suc `zero)
+           [zero⇒ ` "n"
+           |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+           ])
+      · `suc `suc `zero
+  ⟶⟨ β-ƛ (V-suc (V-suc V-zero)) ⟩
+    case `suc `suc `zero
+      [zero⇒ `suc `suc `zero
+      |suc "m" ⇒ `suc (plus · ` "m" · `suc `suc `zero)
+      ]
+  ⟶⟨ β-suc ⟩
+    `suc (plus · `suc `zero · `suc `suc `zero)
+  ⟶⟨⟩
+    `suc (
+      (μ "+" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (` "+" · ` "m" · ` "n")
+          ])
+        · `suc `zero
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-·₁ (ξ-·₁ β-μ)) ⟩
+    `suc (
+      (ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `suc `zero
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-·₁ (β-ƛ (V-suc V-zero))) ⟩
+    `suc (
+      (ƛ "n" ⇒
+        case `suc `zero
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (β-ƛ (V-suc (V-suc V-zero))) ⟩
+    `suc (
+      case `suc `zero
+        [zero⇒ `suc `suc `zero
+        |suc "m" ⇒ `suc (plus · ` "m" · `suc `suc `zero)
+        ]
+    )
+  ⟶⟨ ξ-suc β-suc ⟩
+    `suc `suc (plus · `zero · `suc `suc `zero)
+  ⟶⟨⟩
+    `suc `suc (
+      (μ "+" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (` "+" · ` "m" · ` "n")
+          ])
+        · `zero
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-suc (ξ-·₁ (ξ-·₁ β-μ))) ⟩
+    `suc `suc (
+      (ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `zero
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-suc (ξ-·₁ (β-ƛ V-zero))) ⟩
+    `suc `suc (
+      (ƛ "n" ⇒
+        case `zero
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `suc `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-suc (β-ƛ (V-suc (V-suc V-zero)))) ⟩
+    `suc `suc (
+      case `zero
+        [zero⇒ `suc `suc `zero
+        |suc "m" ⇒ `suc (plus · ` "m" · `suc `suc `zero)
+        ]
+    )
+  ⟶⟨ ξ-suc (ξ-suc β-zero) ⟩
+    `suc `suc `suc `suc `zero
+  ∎
+
+_ : plusᶜ · twoᶜ · twoᶜ · sucᶜ · `zero -↠ `suc `suc `suc `suc `zero
+_ =
+  begin
+    (ƛ "m" ⇒ ƛ "n" ⇒ ƛ "s" ⇒ ƛ "z" ⇒ ` "m" · ` "s" · (` "n" · ` "s" · ` "z"))
+      · twoᶜ · twoᶜ · sucᶜ · `zero
+  ⟶⟨ ξ-·₁ (ξ-·₁ (ξ-·₁ (β-ƛ V-ƛ))) ⟩
+    (ƛ "n" ⇒ ƛ "s" ⇒ ƛ "z" ⇒ twoᶜ · ` "s" · (` "n" · ` "s" · ` "z"))
+      · twoᶜ · sucᶜ · `zero
+  ⟶⟨ ξ-·₁ (ξ-·₁ (β-ƛ V-ƛ)) ⟩
+    (ƛ "s" ⇒ ƛ "z" ⇒ twoᶜ · ` "s" · (twoᶜ · ` "s" · ` "z")) · sucᶜ · `zero
+  ⟶⟨ ξ-·₁ (β-ƛ V-ƛ) ⟩
+    (ƛ "z" ⇒ twoᶜ · sucᶜ · (twoᶜ · sucᶜ · ` "z")) · `zero
+  ⟶⟨ β-ƛ V-zero ⟩
+    twoᶜ · sucᶜ · (twoᶜ · sucᶜ · `zero)
+  ⟶⟨ ξ-·₁ (β-ƛ V-ƛ) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · (twoᶜ · sucᶜ · `zero)
+  ⟶⟨ ξ-·₂ V-ƛ (ξ-·₁ (β-ƛ V-ƛ)) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · ((ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · `zero)
+  ⟶⟨ ξ-·₂ V-ƛ (β-ƛ V-zero) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · (sucᶜ · (sucᶜ · `zero))
+  ⟶⟨ ξ-·₂ V-ƛ (ξ-·₂ V-ƛ (β-ƛ V-zero)) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · (sucᶜ · (`suc `zero))
+  ⟶⟨ ξ-·₂ V-ƛ (β-ƛ (V-suc V-zero)) ⟩
+    (ƛ "z" ⇒ sucᶜ · (sucᶜ · ` "z")) · (`suc `suc `zero)
+  ⟶⟨ β-ƛ (V-suc (V-suc V-zero)) ⟩
+    sucᶜ · (sucᶜ · `suc `suc `zero)
+  ⟶⟨ ξ-·₂ V-ƛ (β-ƛ (V-suc (V-suc V-zero))) ⟩
+    sucᶜ · (`suc `suc `suc `zero)
+  ⟶⟨ β-ƛ (V-suc (V-suc (V-suc V-zero))) ⟩
+   `suc (`suc (`suc (`suc `zero)))
+  ∎
+
+one : Term
+one = `suc `zero
+
+plus-example : plus · one · one -↠ two
+plus-example =
+  begin
+    plus · one · one
+  ⟶⟨⟩
+    (μ "+" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+      case ` "m"
+        [zero⇒ ` "n"
+        |suc "m" ⇒ `suc (` "+" · ` "m" · ` "n")
+        ])
+      · `suc `zero
+      · `suc `zero
+  ⟶⟨ ξ-·₁ (ξ-·₁ β-μ) ⟩
+    (ƛ "m" ⇒ ƛ "n" ⇒
+      case ` "m"
+        [zero⇒ ` "n"
+        |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+        ])
+      · `suc `zero
+      · `suc `zero
+  ⟶⟨ ξ-·₁ (β-ƛ (V-suc V-zero)) ⟩
+    (ƛ "n" ⇒
+      case `suc `zero
+        [zero⇒ ` "n"
+        |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+        ])
+      · `suc `zero
+  ⟶⟨ β-ƛ (V-suc V-zero) ⟩
+    case `suc `zero
+      [zero⇒ `suc `zero
+      |suc "m" ⇒ `suc (plus · ` "m" · `suc `zero)
+      ]
+  ⟶⟨ β-suc ⟩
+    `suc (plus · `zero · `suc `zero)
+  ⟶⟨⟩
+    `suc (
+      (μ "+" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (` "+" · ` "m" · ` "n")
+          ])
+        · `zero
+        · `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-·₁ (ξ-·₁ β-μ)) ⟩
+    `suc (
+      (ƛ "m" ⇒ ƛ "n" ⇒
+        case ` "m"
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `zero
+        · `suc `zero
+    )
+  ⟶⟨ ξ-suc (ξ-·₁ (β-ƛ V-zero)) ⟩
+    `suc (
+      (ƛ "n" ⇒
+        case `zero
+          [zero⇒ ` "n"
+          |suc "m" ⇒ `suc (plus · ` "m" · ` "n")
+          ])
+        · `suc `zero
+    )
+  ⟶⟨ ξ-suc (β-ƛ (V-suc V-zero)) ⟩
+    `suc (
+      case `zero
+        [zero⇒ `suc `zero
+        |suc "m" ⇒ `suc (plus · ` "m" · `suc `zero)
+        ]
+    )
+  ⟶⟨ ξ-suc β-zero ⟩
+    `suc `suc `zero
+  ⟶⟨⟩
+    two
+  ∎
