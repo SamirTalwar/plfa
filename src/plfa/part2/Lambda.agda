@@ -4,14 +4,14 @@ open import Data.Bool using (T; not)
 open import Data.Empty using (⊥; ⊥-elim)
 open import Data.List using (List; _∷_; [])
 open import Data.Nat using (ℕ; zero; suc)
-open import Data.Product using (∃-syntax; _×_)
+open import Data.Product using (∃-syntax; _×_; _,_)
 open import Data.String using (String; _≟_)
 open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl; cong)
 open Relation.Binary.PropositionalEquality.≡-Reasoning using (step-≡; _≡⟨⟩_) renaming (begin_ to ≡-begin_; _∎ to _≡∎)
 open import Relation.Nullary using (Dec; yes; no; ¬_)
 open import Relation.Nullary.Decidable using (⌊_⌋; False; toWitnessFalse)
 open import Relation.Nullary.Negation using (¬?)
-open import plfa.part1.Isomorphism using (_≲_)
+open import plfa.part1.Isomorphism using (_≃_; _≲_)
 
 Id : Set
 Id = String
@@ -60,7 +60,7 @@ mul = μ "*" ⇒ ƛ "m" ⇒ ƛ "n" ⇒
 
 mulᶜ : Term
 mulᶜ = ƛ "m" ⇒ ƛ "n" ⇒ ƛ "s" ⇒ ƛ "z" ⇒
-         ` "m" · (` "n" · ` "s" · ` "z") · ` "z"
+         ` "m" · (` "n" · ` "s") · ` "z"
 
 -- Primed
 
@@ -590,3 +590,209 @@ plus-example =
   ⟶⟨⟩
     two
   ∎
+
+-- Types
+
+infixr 7 _⇒_
+
+data Type : Set where
+  _⇒_ : Type → Type → Type
+  `ℕ : Type
+
+-- Quiz: the type of:
+--   ƛ "s" ⇒ ` "s" · (` "s"  · `zero)
+-- is:
+--   2. (`ℕ ⇒ `ℕ) ⇒ `ℕ
+
+-- Quiz: the type of:
+--   (ƛ "s" ⇒ ` "s" · (` "s"  · `zero)) · sucᶜ
+-- is:
+--   6. `ℕ
+
+-- Typing
+
+infixl 5 _,_⦂_
+
+data Context : Set where
+  ∅     : Context
+  _,_⦂_ : Context → Id → Type → Context
+
+Context-≃ : Context ≃ List (Id × Type)
+Context-≃ =
+  record
+    { to   = to
+    ; from = from
+    ; from∘to = from∘to
+    ; to∘from = to∘from
+    }
+  where
+  to : Context → List (Id × Type)
+  to ∅ = []
+  to (Γ , x ⦂ A) = (x , A) ∷ to Γ
+
+  from : List (Id × Type) → Context
+  from [] = ∅
+  from ((x , A) ∷ Γ) = (from Γ) , x ⦂ A
+
+  from∘to : (x : Context) → from (to x) ≡ x
+  from∘to ∅ = refl
+  from∘to (Γ , x ⦂ A) =
+    ≡-begin
+      from (to (Γ , x ⦂ A))
+    ≡⟨⟩
+      from (to Γ) , x ⦂ A
+    ≡⟨ cong (_, x ⦂ A) (from∘to Γ) ⟩
+      Γ , x ⦂ A
+    ≡∎
+
+  to∘from : (y : List (Id × Type)) → to (from y) ≡ y
+  to∘from [] = refl
+  to∘from ((x , A) ∷ Γ) =
+    ≡-begin
+      to (from ((x , A) ∷ Γ))
+    ≡⟨⟩
+      (x , A) ∷ to (from Γ)
+    ≡⟨ cong ((x , A) ∷_) (to∘from Γ) ⟩
+      (x , A) ∷ Γ
+    ≡∎
+
+infix 4 _∋_⦂_
+
+data _∋_⦂_ : Context → Id → Type → Set where
+  Z : ∀ {Γ x A}
+    → Γ , x ⦂ A ∋ x ⦂ A
+
+  S : ∀ {Γ x y A B}
+    → x ≢ y
+    → Γ ∋ x ⦂ A
+    → Γ , y ⦂ B ∋ x ⦂ A
+
+S′ : ∀ {Γ x y A B}
+   → {x≢y : False (x ≟ y)}
+   → Γ ∋ x ⦂ A
+   → Γ , y ⦂ B ∋ x ⦂ A
+S′ {x≢y = x≢y} Γ = S (toWitnessFalse x≢y) Γ
+
+infix 4 _⊢_⦂_
+
+data _⊢_⦂_ : Context → Term → Type → Set where
+  -- Axiom
+  ⊢` : ∀ {Γ x A}
+     → Γ ∋ x ⦂ A
+     → Γ ⊢ ` x ⦂ A
+
+  -- ⇒-I
+  ⊢ƛ : ∀ {Γ x N A B}
+     → Γ , x ⦂ A ⊢ N ⦂ B
+     → Γ ⊢ ƛ x ⇒ N ⦂ A ⇒ B
+
+  -- ⇒-E
+  _·_ : ∀ {Γ L M A B}
+      → Γ ⊢ L ⦂ A ⇒ B
+      → Γ ⊢ M ⦂ A
+      → Γ ⊢ L · M ⦂ B
+
+  -- ℕ-I₁
+  ⊢zero : ∀ {Γ}
+        → Γ ⊢ `zero ⦂ `ℕ
+
+  -- ℕ-I₂
+  ⊢suc : ∀ {Γ M}
+       → Γ ⊢ M ⦂ `ℕ
+       → Γ ⊢ `suc M ⦂ `ℕ
+
+  -- ℕ-E
+  ⊢case : ∀ {Γ L M x N A}
+        → Γ ⊢ L ⦂ `ℕ
+        → Γ ⊢ M ⦂ A
+        → Γ , x ⦂ `ℕ ⊢ N ⦂ A
+        → Γ ⊢ case L [zero⇒ M |suc x ⇒ N ] ⦂ A
+
+  ⊢μ : ∀ {Γ x M A}
+     → Γ , x ⦂ A ⊢ M ⦂ A
+     → Γ ⊢ μ x ⇒ M ⦂ A
+
+Ch : Type → Type
+Ch A = (A ⇒ A) ⇒ A ⇒ A
+
+⊢twoᶜ : ∀ {Γ A} → Γ ⊢ twoᶜ ⦂ Ch A
+⊢twoᶜ = ⊢ƛ (⊢ƛ (⊢` ∋s · (⊢` ∋s · ⊢` ∋z)))
+  where
+  ∋s = S′ Z
+  ∋z = Z
+
+⊢two : ∀ {Γ} → Γ ⊢ two ⦂ `ℕ
+⊢two = ⊢suc (⊢suc ⊢zero)
+
+⊢plus : ∀ {Γ} → Γ ⊢ plus ⦂ `ℕ ⇒ `ℕ ⇒ `ℕ
+⊢plus = ⊢μ (⊢ƛ (⊢ƛ (⊢case (⊢` ∋m) (⊢` ∋n)
+         (⊢suc (⊢` ∋+ · ⊢` ∋m′ · ⊢` ∋n′)))))
+  where
+  ∋+  = S′ (S′ (S′ Z))
+  ∋m  = S′ Z
+  ∋n  = Z
+  ∋m′ = Z
+  ∋n′ = S′ Z
+
+⊢2+2 : ∅ ⊢ plus · two · two ⦂ `ℕ
+⊢2+2 = ⊢plus · ⊢two · ⊢two
+
+⊢plusᶜ : ∀ {Γ A} → Γ ⊢ plusᶜ ⦂ Ch A ⇒ Ch A ⇒ Ch A
+⊢plusᶜ = ⊢ƛ (⊢ƛ (⊢ƛ (⊢ƛ (⊢` ∋m · ⊢` ∋s · (⊢` ∋n · ⊢` ∋s · ⊢` ∋z)))))
+  where
+  ∋m = S′ (S′ (S′ Z))
+  ∋n = S′ (S′ Z)
+  ∋s = S′ Z
+  ∋z = Z
+
+⊢sucᶜ : ∀ {Γ} → Γ ⊢ sucᶜ ⦂ `ℕ ⇒ `ℕ
+⊢sucᶜ = ⊢ƛ (⊢suc (⊢` ∋n))
+  where
+  ∋n = Z
+
+⊢2+2ᶜ : ∅ ⊢ plusᶜ · twoᶜ · twoᶜ · sucᶜ · `zero ⦂ `ℕ
+⊢2+2ᶜ = ⊢plusᶜ · ⊢twoᶜ · ⊢twoᶜ · ⊢sucᶜ · ⊢zero
+
+∋-injective : ∀ {Γ x A B}
+            → Γ ∋ x ⦂ A
+            → Γ ∋ x ⦂ B
+            → A ≡ B
+∋-injective           Z            Z  = refl
+∋-injective           Z  (S x≢x    _) = ⊥-elim (x≢x refl)
+∋-injective (S x≢x    _)           Z  = ⊥-elim (x≢x refl)
+∋-injective (S   _ ∋x⦂A) (S   _ ∋x⦂B) = ∋-injective ∋x⦂A ∋x⦂B
+
+nope₁ : ∀ {Γ A} → ¬ (Γ ⊢ `zero · `suc `zero ⦂ A)
+nope₁ (() · _)
+
+nope₂ : ∀ {A} → ¬ (∅ ⊢ ƛ "x" ⇒ ` "x" · ` "x" ⦂ A)
+nope₂ (⊢ƛ (⊢` Z · ⊢` ∋x)) = contradiction (∋-injective Z ∋x)
+  where
+  contradiction : ∀ {A B} → ¬ (A ⇒ B ≡ A)
+  contradiction ()
+
+-- Quiz 1: A ≡ `ℕ
+quiz₁ : ∅ , "y" ⦂ `ℕ ⇒ `ℕ , "x" ⦂ `ℕ ⊢ ` "y" · ` "x" ⦂ `ℕ
+quiz₁ = ⊢` (S′ Z) · ⊢` Z
+
+-- Quiz 2: no such A
+quiz₂ : ∀ {A} → ¬ (∅ , "y" ⦂ `ℕ ⇒ `ℕ , "x" ⦂ `ℕ ⊢ ` "x" · ` "y" ⦂ A)
+quiz₂ (⊢` (S x≢x _) · _) = x≢x refl
+
+-- Quiz 3: A ≡ `ℕ ⇒ `ℕ
+quiz₃ : ∅ , "y" ⦂ `ℕ ⇒ `ℕ ⊢ ƛ "x" ⇒ ` "y" · ` "x" ⦂ `ℕ ⇒ `ℕ
+quiz₃ = ⊢ƛ ((⊢` (S′ Z)) · ⊢` Z)
+
+-- Quiz 4 : no such A and B
+quiz₄ : ∀ {A B} → ¬ (∅ , "x" ⦂ A ⊢ ` "x" · ` "x" ⦂ B)
+quiz₄ (⊢` Z · ⊢` (S x≢x _)) = x≢x refl
+
+-- Quiz 5: A ≡ B ≡ C ≡ `ℕ ⇒ `ℕ
+quiz₅ : ∅ , "x" ⦂ `ℕ ⇒ `ℕ , "y" ⦂ `ℕ ⇒ `ℕ ⊢ ƛ "z" ⇒ ` "x" · (` "y" · ` "z") ⦂ `ℕ ⇒ `ℕ
+quiz₅ = ⊢ƛ ((⊢` (S′ (S′ Z))) · ((⊢` (S′ Z)) · (⊢` Z)))
+
+⊢mul : ∀ {Γ} → Γ ⊢ mul ⦂ `ℕ ⇒ `ℕ ⇒ `ℕ
+⊢mul = ⊢μ (⊢ƛ (⊢ƛ (⊢case (⊢` (S′ Z)) ⊢zero (⊢plus · ⊢` (S′ Z) · (⊢` (S′ (S′ (S′ Z))) · ⊢` Z · ⊢` (S′ Z))))))
+
+⊢mulᶜ : ∀ {Γ A} → Γ ⊢ mulᶜ ⦂ Ch A ⇒ Ch A ⇒ Ch A
+⊢mulᶜ = ⊢ƛ (⊢ƛ (⊢ƛ (⊢ƛ (⊢` (S′ (S′ (S′ Z))) · (⊢` (S′ (S′ Z)) · ⊢` (S′ Z)) · ⊢` Z))))
