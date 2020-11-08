@@ -1,6 +1,6 @@
 module plfa.part2.Properties where
 
-open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl; sym; cong; cong₂)
+open import Relation.Binary.PropositionalEquality using (_≡_; _≢_; refl; sym; ≢-sym; cong; cong₂)
 open import Data.String using (String; _≟_)
 open import Data.Nat using (ℕ; zero; suc)
 open import Data.Empty using (⊥; ⊥-elim)
@@ -10,6 +10,8 @@ open import Relation.Nullary using (¬_; Dec; yes; no)
 open import Function using (_∘_)
 open import plfa.part1.Isomorphism
 open import plfa.part2.Lambda
+
+-- Values do not reduce
 
 V¬⟶ : ∀ {M N}
     → Value M
@@ -22,6 +24,8 @@ V¬⟶ (V-suc VM) (ξ-suc M⟶N) = V¬⟶ VM M⟶N
     → M ⟶ N
     → ¬ Value M
 ⟶¬V M⟶N VM = V¬⟶ VM M⟶N
+
+-- Canonical Forms
 
 data Canonical_⦂_ : Term → Type → Set where
   C-ƛ : ∀ {x A N B}
@@ -55,6 +59,8 @@ typed : ∀ {M A}
 typed   (C-ƛ ⊢N) = ⊢ƛ ⊢N
 typed    C-zero  = ⊢zero
 typed (C-suc CM) = ⊢suc (typed CM)
+
+-- Progress
 
 data Progress (M : Term) : Set where
   step : ∀ {N}
@@ -142,3 +148,97 @@ value? : ∀ {A M} → ∅ ⊢ M ⦂ A → Dec (Value M)
 value? ⊢M with progress ⊢M
 ... | step M⟶M′ = no (⟶¬V M⟶M′)
 ... | done VM = yes VM
+
+-- Renaming
+
+ext : ∀ {Γ Δ}
+    → (∀ {x A}     →         Γ ∋ x ⦂ A →         Δ ∋ x ⦂ A)
+    → (∀ {x y A B} → Γ , y ⦂ B ∋ x ⦂ A → Δ , y ⦂ B ∋ x ⦂ A)
+ext ρ         Z  = Z
+ext ρ (S x≢y ∋x) = S x≢y (ρ ∋x)
+
+rename : ∀ {Γ Δ}
+       → (∀ {x A} → Γ ∋ x ⦂ A → Δ ∋ x ⦂ A)
+       → (∀ {M A} → Γ ⊢ M ⦂ A → Δ ⊢ M ⦂ A)
+rename ρ          (⊢` ∋w) = ⊢` (ρ ∋w)
+rename ρ          (⊢ƛ ⊢N) = ⊢ƛ (rename (ext ρ) ⊢N)
+rename ρ        (⊢L · ⊢M) = rename ρ ⊢L · rename ρ ⊢M
+rename ρ           ⊢zero  = ⊢zero
+rename ρ        (⊢suc ⊢M) = ⊢suc (rename ρ ⊢M)
+rename ρ (⊢case ⊢L ⊢M ⊢N) = ⊢case (rename ρ ⊢L) (rename ρ ⊢M) (rename (ext ρ) ⊢N)
+rename ρ          (⊢μ ⊢M) = ⊢μ (rename (ext ρ) ⊢M)
+
+weaken : ∀ {Γ M A}
+       → ∅ ⊢ M ⦂ A
+       → Γ ⊢ M ⦂ A
+weaken {Γ} ⊢M = rename ρ ⊢M
+  where
+  ρ : ∀ {z C}
+    → ∅ ∋ z ⦂ C
+    → Γ ∋ z ⦂ C
+  ρ ()
+
+drop : ∀ {Γ x M A B C}
+     → Γ , x ⦂ A , x ⦂ B ⊢ M ⦂ C
+     → Γ         , x ⦂ B ⊢ M ⦂ C
+drop {Γ} {x} {M} {A} {B} {C} ⊢M = rename ρ ⊢M
+  where
+  ρ : ∀ {z D}
+    → Γ , x ⦂ A , x ⦂ B ∋ z ⦂ D
+    → Γ         , x ⦂ B ∋ z ⦂ D
+  ρ                  Z  = Z
+  ρ          (S x≢x Z ) = ⊥-elim (x≢x refl)
+  ρ (S z≢x (S z≢x₁ ∋z)) = S z≢x₁ ∋z
+
+swap : ∀ {Γ x y M A B C}
+     → x ≢ y
+     → Γ , x ⦂ A , y ⦂ B ⊢ M ⦂ C
+     → Γ , y ⦂ B , x ⦂ A ⊢ M ⦂ C
+swap {Γ} {x} {y} {M} {A} {B} {C} x≢y ⊢M = rename ρ ⊢M
+  where
+  ρ : ∀ {z D}
+    → Γ , x ⦂ A , y ⦂ B ∋ z ⦂ D
+    → Γ , y ⦂ B , x ⦂ A ∋ z ⦂ D
+  ρ                 Z  = S (≢-sym x≢y) Z
+  ρ          (S z≢x Z) = Z
+  ρ (S z≢y (S z≢x ∋z)) = S z≢x (S z≢y ∋z)
+
+-- Substitution
+
+subst : ∀ {Γ x N V A B}
+      → ∅ ⊢ V ⦂ A
+      → Γ , x ⦂ A ⊢ N ⦂ B
+      → Γ ⊢ N [ x := V ] ⦂ B
+subst {x = y} ⊢V (⊢` {x = x} Z) with x ≟ y
+... | yes   _ = weaken ⊢V
+... |  no x≢y = ⊥-elim (x≢y refl)
+subst {x = y} ⊢V (⊢` {x = x} (S x≢y ∋x)) with x ≟ y
+... | yes refl = ⊥-elim (x≢y refl)
+... |  no    _ = ⊢` ∋x
+subst {x = y} ⊢V (⊢ƛ {x = x} ⊢N) with x ≟ y
+... | yes refl = ⊢ƛ (drop ⊢N)
+... |  no  x≢y = ⊢ƛ (subst ⊢V (swap (≢-sym x≢y) ⊢N))
+subst ⊢V (⊢L · ⊢M) = subst ⊢V ⊢L · subst ⊢V ⊢M
+subst ⊢V ⊢zero = ⊢zero
+subst ⊢V (⊢suc ⊢M) = ⊢suc (subst ⊢V ⊢M)
+subst {x = y} ⊢V (⊢case {x = x} ⊢L ⊢M ⊢N) with x ≟ y
+... | yes refl = ⊢case (subst ⊢V ⊢L) (subst ⊢V ⊢M) (drop ⊢N)
+... |  no  x≢y = ⊢case (subst ⊢V ⊢L) (subst ⊢V ⊢M) (subst ⊢V (swap (≢-sym x≢y) ⊢N))
+subst {x = y} ⊢V (⊢μ {x = x} ⊢M) with x ≟ y
+... | yes refl = ⊢μ (drop ⊢M)
+... |  no  x≢y = ⊢μ (subst ⊢V (swap (≢-sym x≢y) ⊢M))
+
+-- Preservation
+
+preserve : ∀ {M N A}
+         → ∅ ⊢ M ⦂ A
+         → M ⟶ N
+         → ∅ ⊢ N ⦂ A
+preserve               (⊢L · ⊢M)   (ξ-·₁ L⟶L′) = preserve ⊢L L⟶L′ · ⊢M
+preserve            (⊢ƛ ⊢L · ⊢M) (ξ-·₂ _ M⟶M′) = ⊢ƛ ⊢L · preserve ⊢M M⟶M′
+preserve            (⊢ƛ ⊢L · ⊢M)       (β-ƛ _) = subst ⊢M ⊢L
+preserve               (⊢suc ⊢M)  (ξ-suc M⟶M′) = ⊢suc (preserve ⊢M M⟶M′)
+preserve        (⊢case ⊢L ⊢M ⊢N) (ξ-case L⟶L′) = ⊢case (preserve ⊢L L⟶L′) ⊢M ⊢N
+preserve     (⊢case ⊢zero ⊢M ⊢N)        β-zero = ⊢M
+preserve (⊢case (⊢suc ⊢L) ⊢M ⊢N)         β-suc = subst ⊢L ⊢N
+preserve                 (⊢μ ⊢M)           β-μ = subst (⊢μ ⊢M) ⊢M
