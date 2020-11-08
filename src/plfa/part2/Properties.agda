@@ -242,3 +242,115 @@ preserve        (⊢case ⊢L ⊢M ⊢N) (ξ-case L⟶L′) = ⊢case (preserve 
 preserve     (⊢case ⊢zero ⊢M ⊢N)        β-zero = ⊢M
 preserve (⊢case (⊢suc ⊢L) ⊢M ⊢N)         β-suc = subst ⊢L ⊢N
 preserve                 (⊢μ ⊢M)           β-μ = subst (⊢μ ⊢M) ⊢M
+
+-- Evaluation
+
+sucμ = μ "x" ⇒ `suc (` "x")
+
+-- This can "reduce" forever.
+_ =
+  begin
+    sucμ
+  ⟶⟨ β-μ ⟩
+    `suc sucμ
+  ⟶⟨ ξ-suc β-μ ⟩
+    `suc `suc sucμ
+  ⟶⟨ ξ-suc (ξ-suc β-μ) ⟩
+    `suc `suc `suc sucμ
+  --  ...
+  ∎
+
+record Gas : Set where
+  constructor gas
+  field
+    amount : ℕ
+
+data Finished (N : Term) : Set where
+  done : Value N
+       → Finished N
+
+  out-of-gas : Finished N
+
+data Steps (L : Term) : Set where
+  steps : ∀ {N}
+        → L -↠ N
+        → Finished N
+        → Steps L
+
+eval : ∀ {L A}
+     → Gas
+     → ∅ ⊢ L ⦂ A
+     → Steps L
+eval {L}    (gas zero)  _ = steps (L ∎) out-of-gas
+eval {L} (gas (suc g)) ⊢L with progress ⊢L
+... | done VL = steps (L ∎) (done VL)
+... | step {M} L⟶M with eval (gas g) (preserve ⊢L L⟶M)
+...   | steps {N} M-↠N fin = steps (L ⟶⟨ L⟶M ⟩ M-↠N) fin
+
+⊢sucμ : ∅ ⊢ μ "x" ⇒ `suc ` "x" ⦂ `ℕ
+⊢sucμ = ⊢μ (⊢suc (⊢` Z))
+
+_ : eval (gas 3) ⊢sucμ ≡
+    steps
+      (
+        begin
+          μ "x" ⇒ `suc ` "x"
+        ⟶⟨ β-μ ⟩
+          `suc (μ "x" ⇒ `suc ` "x")
+        ⟶⟨ ξ-suc β-μ ⟩
+          `suc `suc (μ "x" ⇒ `suc ` "x")
+        ⟶⟨ ξ-suc (ξ-suc β-μ) ⟩
+          `suc `suc `suc (μ "x" ⇒ `suc ` "x")
+        ∎
+      )
+      out-of-gas
+_ = refl
+
+_ : eval (gas 100) (⊢twoᶜ · ⊢sucᶜ · ⊢zero) ≡
+    steps
+      (
+        begin
+          twoᶜ · sucᶜ · `zero
+        ⟶⟨⟩
+          (ƛ "s" ⇒ ƛ "z" ⇒ ` "s" · (` "s" · ` "z")) · (ƛ "n" ⇒ `suc (` "n")) · `zero
+        ⟶⟨ ξ-·₁ (β-ƛ V-ƛ) ⟩
+          (ƛ "z" ⇒ (ƛ "n" ⇒ `suc (` "n")) · ((ƛ "n" ⇒ `suc (` "n")) · ` "z")) · `zero
+        ⟶⟨ β-ƛ V-zero ⟩
+          (ƛ "n" ⇒ `suc (` "n")) · ((ƛ "n" ⇒ `suc (` "n")) · `zero)
+        ⟶⟨ ξ-·₂ V-ƛ (β-ƛ V-zero) ⟩
+          (ƛ "n" ⇒ `suc (` "n")) · (`suc `zero)
+        ⟶⟨ β-ƛ (V-suc V-zero) ⟩
+          `suc `suc `zero
+        ∎
+      )
+      (done (V-suc (V-suc V-zero)))
+_ = refl
+
+-- See the book for steps.
+_ : eval (gas 100) ⊢2+2 ≡ steps _ (done (V-suc (V-suc (V-suc (V-suc V-zero)))))
+_ = refl
+
+_ : eval (gas 100) ⊢2+2ᶜ ≡ steps _ (done (V-suc (V-suc (V-suc (V-suc V-zero)))))
+_ = refl
+
+mul-eval : eval (gas 100) (⊢mul · ⊢two · ⊢two) ≡ steps _ (done (V-suc (V-suc (V-suc (V-suc V-zero)))))
+mul-eval = refl
+
+-- Progress: each term M is a value (Value M) or can be reduced to one other term N (M ⟶ N).
+-- Preservation: if ∅ ⊢ M ⦂ A and M ⟶ N, then ∅ ⊢ N ⦂ A.
+
+¬subject-expansion₁ : ∀ {A}
+                    → ∃[ M ] ∃[ N ] (
+                          M ⟶ N
+                        → ∅ ⊢ N ⦂ A
+                        → ¬(∅ ⊢ M ⦂ A)
+                      )
+¬subject-expansion₁ = ⟨ (ƛ "a" ⇒ `zero) · (ƛ "x" ⇒ ` "x" · ` "x") , ⟨ `zero , (λ{ (β-ƛ V-ƛ) ⊢zero (⊢ƛ ⊢zero · ⊢ƛ (⊢` Z · ⊢` (S x≢x _))) → x≢x refl }) ⟩ ⟩
+
+¬subject-expansion₂ : ∀ {A}
+                    → ∃[ M ] ∃[ N ] (
+                          M ⟶ N
+                        → ∅ ⊢ N ⦂ A
+                        → ¬(∅ ⊢ M ⦂ A)
+                      )
+¬subject-expansion₂ = ⟨ case `zero [zero⇒ `zero |suc "x" ⇒ ` "x" · ` "x" ] , ⟨ `zero , (λ{ β-zero ⊢zero (⊢case ⊢zero ⊢zero (⊢` (S x≢x _) · ⊢` _)) → x≢x refl }) ⟩ ⟩
