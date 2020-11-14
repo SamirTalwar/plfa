@@ -226,6 +226,7 @@ data _⟶_ : Term → Term → Set where
          → case `zero [zero⇒ M |suc x ⇒ N ] ⟶ M
 
   β-suc : ∀ {x V M N}
+        → Value V
         → case `suc V [zero⇒ M |suc x ⇒ N ] ⟶ N [ x := V ]
 
   β-μ : ∀ {x M}
@@ -400,7 +401,7 @@ _ =
       [zero⇒ `suc `suc `zero
       |suc "m" ⇒ `suc (plus · ` "m" · `suc `suc `zero)
       ]
-  ⟶⟨ β-suc ⟩
+  ⟶⟨ β-suc (V-suc V-zero) ⟩
     `suc (plus · `suc `zero · `suc `suc `zero)
   ⟶⟨⟩
     `suc (
@@ -438,7 +439,7 @@ _ =
         |suc "m" ⇒ `suc (plus · ` "m" · `suc `suc `zero)
         ]
     )
-  ⟶⟨ ξ-suc β-suc ⟩
+  ⟶⟨ ξ-suc (β-suc V-zero) ⟩
     `suc `suc (plus · `zero · `suc `suc `zero)
   ⟶⟨⟩
     `suc `suc (
@@ -547,7 +548,7 @@ plus-example =
       [zero⇒ `suc `zero
       |suc "m" ⇒ `suc (plus · ` "m" · `suc `zero)
       ]
-  ⟶⟨ β-suc ⟩
+  ⟶⟨ β-suc V-zero ⟩
     `suc (plus · `zero · `suc `zero)
   ⟶⟨⟩
     `suc (

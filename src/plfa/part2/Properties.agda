@@ -88,7 +88,7 @@ progress (⊢case ⊢L ⊢M ⊢N) with progress ⊢L
 ... | step L⟶L′ = step (ξ-case L⟶L′)
 ... | done VL with canonical ⊢L VL
 ...   | C-zero = step β-zero
-...   | C-suc CL = step β-suc
+...   | C-suc CL = step (β-suc (value CL))
 progress (⊢μ ⊢M) = step β-μ
 
 Progress-≃ : ∀ {M}
@@ -141,7 +141,7 @@ progress′ (case L [zero⇒ M |suc x ⇒ N ]) (⊢case ⊢L ⊢M ⊢N) with pro
 ... | inj₂ ⟨ L′ , L⟶L′ ⟩ = inj₂ ⟨ case L′ [zero⇒ M |suc x ⇒ N ] , ξ-case L⟶L′ ⟩
 ... | inj₁ VL with canonical ⊢L VL
 ...   | C-zero = inj₂ ⟨ M , β-zero ⟩
-...   | C-suc {V} CL = inj₂ ⟨ N [ x := V ] , β-suc ⟩
+...   | C-suc {V} CL = inj₂ ⟨ N [ x := V ] , (β-suc (value CL)) ⟩
 progress′ (μ x ⇒ M) (⊢μ ⊢M) = inj₂ ⟨ M [ x := μ x ⇒ M ] , β-μ ⟩
 
 value? : ∀ {A M} → ∅ ⊢ M ⦂ A → Dec (Value M)
@@ -240,7 +240,7 @@ preserve            (⊢ƛ ⊢L · ⊢M)       (β-ƛ _) = subst ⊢M ⊢L
 preserve               (⊢suc ⊢M)  (ξ-suc M⟶M′) = ⊢suc (preserve ⊢M M⟶M′)
 preserve        (⊢case ⊢L ⊢M ⊢N) (ξ-case L⟶L′) = ⊢case (preserve ⊢L L⟶L′) ⊢M ⊢N
 preserve     (⊢case ⊢zero ⊢M ⊢N)        β-zero = ⊢M
-preserve (⊢case (⊢suc ⊢L) ⊢M ⊢N)         β-suc = subst ⊢L ⊢N
+preserve (⊢case (⊢suc ⊢L) ⊢M ⊢N)     (β-suc _) = subst ⊢L ⊢N
 preserve                 (⊢μ ⊢M)           β-μ = subst (⊢μ ⊢M) ⊢M
 
 -- Evaluation
@@ -354,3 +354,60 @@ mul-eval = refl
                         → ¬(∅ ⊢ M ⦂ A)
                       )
 ¬subject-expansion₂ = ⟨ case `zero [zero⇒ `zero |suc "x" ⇒ ` "x" · ` "x" ] , ⟨ `zero , (λ{ β-zero ⊢zero (⊢case ⊢zero ⊢zero (⊢` (S x≢x _) · ⊢` _)) → x≢x refl }) ⟩ ⟩
+
+-- Well-typed terms don't get stuck
+
+Normal : Term → Set
+Normal M = ∀ {N} → ¬ (M ⟶ N)
+
+Stuck : Term → Set
+Stuck M = Normal M × ¬ Value M
+
+stuck-example : Stuck (` "x")
+stuck-example = ⟨ (λ ()) , (λ ()) ⟩
+
+unstuck : ∀ {M A}
+        → ∅ ⊢ M ⦂ A
+        → ¬ (Stuck M)
+unstuck ⊢M with progress ⊢M
+... | done VM = λ{ ⟨ _ , ¬VM ⟩ → ¬VM VM }
+... | step M⟶N = λ{ ⟨ ¬M⟶N , _ ⟩ → ¬M⟶N M⟶N }
+
+preserves : ∀ {M N A}
+          → ∅ ⊢ M ⦂ A
+          → M -↠ N
+          → ∅ ⊢ N ⦂ A
+preserves ⊢M (_ ∎) = ⊢M
+preserves ⊢L (_ ⟶⟨ L⟶M ⟩ M-↠N) = preserves (preserve ⊢L L⟶M) M-↠N
+
+wttdgs : ∀ {M N A}
+       → ∅ ⊢ M ⦂ A
+       → M -↠ N
+       → ¬ (Stuck N)
+wttdgs ⊢M M-↠N = unstuck (preserves ⊢M M-↠N)
+
+-- Reduction is deterministic
+
+cong₄ : ∀ {A B C D E : Set} (f : A → B → C → D → E)
+        {s w : A} {t x : B} {u y : C} {v z : D}
+      → s ≡ w → t ≡ x → u ≡ y → v ≡ z → f s t u v ≡ f w x y z
+cong₄ f refl refl refl refl = refl
+
+det : ∀ {M M′ M″}
+    → M ⟶ M′
+    → M ⟶ M″
+    → M′ ≡ M″
+det (ξ-·₁ L⟶L′) (ξ-·₁ L⟶L″) = cong₂ _·_ (det L⟶L′ L⟶L″) refl
+det (ξ-·₁ L⟶L′) (ξ-·₂ VL _) = ⊥-elim (V¬⟶ VL L⟶L′)
+det (ξ-·₂ VL _) (ξ-·₁ L⟶L″) = ⊥-elim (V¬⟶ VL L⟶L″)
+det (ξ-·₂ _ M⟶M′) (ξ-·₂ _ M⟶M″) = cong₂ _·_ refl (det M⟶M′ M⟶M″)
+det (ξ-·₂ _ M⟶M′) (β-ƛ VM) = ⊥-elim (V¬⟶ VM M⟶M′)
+det (β-ƛ VM) (ξ-·₂ _ M⟶M′) = ⊥-elim (V¬⟶ VM M⟶M′)
+det (β-ƛ _) (β-ƛ _) = refl
+det (ξ-suc M⟶M′) (ξ-suc M⟶M″) = cong `suc_ (det M⟶M′ M⟶M″)
+det (ξ-case L⟶L′) (ξ-case L⟶L″) = cong₄ case_[zero⇒_|suc_⇒_] (det L⟶L′ L⟶L″) refl refl refl
+det (ξ-case (ξ-suc M⟶M′)) (β-suc VM) = ⊥-elim (V¬⟶ VM M⟶M′)
+det β-zero β-zero = refl
+det (β-suc VM) (ξ-case (ξ-suc M⟶M″)) = ⊥-elim (V¬⟶ VM M⟶M″)
+det (β-suc _) (β-suc _) = refl
+det β-μ β-μ = refl
